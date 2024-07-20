@@ -1,20 +1,32 @@
 package edu.msudenver.cs3013.lab04
 
 import android.Manifest.permission.ACCESS_FINE_LOCATION
+import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.drawable.Icon
+import android.location.Location
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.DrawableRes
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.DrawableCompat
+import com.google.android.gms.location.LocationServices
 
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
+import com.google.android.gms.maps.model.BitmapDescriptor
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.Marker
 import com.google.android.gms.maps.model.MarkerOptions
 import edu.msudenver.cs3013.lab04.databinding.ActivityMapsBinding
 
@@ -23,6 +35,14 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private lateinit var mMap: GoogleMap
     private lateinit var binding: ActivityMapsBinding
     private lateinit var requestPermissionLauncher: ActivityResultLauncher<String>
+    private var marker: Marker? = null
+
+
+    private val fusedLocationProviderClient by lazy {
+        LocationServices.getFusedLocationProviderClient(this)
+    }
+
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,10 +64,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     requestPermissionLauncher.launch(ACCESS_FINE_LOCATION)
                 }
             }
-
-
         }
-
     }
 
     /**
@@ -60,8 +77,12 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
      * installed Google Play services and returned to the app.
      */
     override fun onMapReady(googleMap: GoogleMap) {
-        mMap = googleMap
-        when {
+        mMap = googleMap.apply {
+            setOnMapClickListener { latLng ->
+                addOrMoveSelectedPositionMarker(latLng)
+            }
+        }
+    when {
             hasLocationPermission() -> getLocation()
             shouldShowRequestPermissionRationale(ACCESS_FINE_LOCATION) -> {
                 showPermissionRationale {
@@ -84,10 +105,62 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private fun getLocation() {
         Log.d("MapActivity", "getLocation() called.")
+        fusedLocationProviderClient.lastLocation.addOnSuccessListener {
+            location: Location? -> location?.let{
+                // val userLocation = LatLng(location.latitude, location.longitude)
+           // updateMapLocation(userLocation)
+            //addMarkerAtLocation(userLocation, "You")
+
+                val Colorado=LatLng(39.0,-105.0)
+            updateMapLocation(Colorado)
+            addMarkerAtLocation(Colorado, "You")
+        }
+        }
     }
+
+    private fun updateMapLocation(location:LatLng){
+        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(location,10f))
+    }
+
+    private fun addMarkerAtLocation(location: LatLng, title: String, markerIcon: BitmapDescriptor? = null) = mMap.addMarker(MarkerOptions().title(title).position(location).apply {
+        markerIcon?.let { icon(markerIcon) } })
+
+
+
+    private fun getBitmapDescriptorFromVector(@DrawableRes vectorDrawableResourceId: Int): BitmapDescriptor? {
+    val bitmap = ContextCompat.getDrawable(this, vectorDrawableResourceId)?.let { vectorDrawable ->
+        vectorDrawable.setBounds(0, 0,
+            vectorDrawable.intrinsicWidth,
+            vectorDrawable.intrinsicHeight)
+        val drawableWithTint = DrawableCompat
+            .wrap(vectorDrawable)
+        DrawableCompat.setTint(drawableWithTint, Color.BLUE)
+        val bitmap = Bitmap.createBitmap(
+            vectorDrawable.intrinsicWidth,
+            vectorDrawable.intrinsicHeight,
+            Bitmap.Config.ARGB_8888
+        )
+        val canvas = Canvas(bitmap)
+        drawableWithTint.draw(canvas)
+        bitmap
+    }?: return null
+    return BitmapDescriptorFactory.fromBitmap(bitmap)
+        .also { bitmap?.recycle() }
+}
+
+
+    private fun addOrMoveSelectedPositionMarker(latLng: LatLng) {
+        if (marker == null) {
+            marker = addMarkerAtLocation(latLng, "My car is here",
+                getBitmapDescriptorFromVector(R.drawable.target_icon)
+            )
+        } else { marker?.apply { position = latLng } }
+    }
+
 
     private fun hasLocationPermission() =
         ContextCompat.checkSelfPermission(this, ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
 
 
 
@@ -104,9 +177,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             }
             .create().show()
     }
-
-
-
 
 
 
